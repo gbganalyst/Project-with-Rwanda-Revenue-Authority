@@ -1,0 +1,602 @@
+---
+title: "Automation of Tax Statistics"
+author: "Planning and Research Department"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    theme: united
+    highlight: espresso
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Dear users, you are welcome to RRA data portal for tax statistics analysis and visualization. There are 5 ways to export or save the summarized data and this includes `Copy` to clipboard, `CSV`, `Excel`, `PDF` or `Print` directly.
+
+```{r Instruction note, include=F}
+# We have quite number of chunks in this script.
+# Each chunck has its name on the header
+# We used many pipe or chain functions `%>%` in this script
+```
+
+
+```{r library,include=FALSE}
+
+# This chunk listed the R packeges that will be needed for the automation
+
+pg=c('tidyverse','openxlsx','readxl','gridExtra','DT','plotly')
+for (i in pg){
+  library(i,character.only = T)
+}
+```
+
+  
+```{r Dataset from registration, include=F, cache=T,include=F}
+
+# This is the registration clean up file from Harshil
+
+hasil.file <- read.xlsx('Dataset/file from Hashil.xlsx')
+```
+
+#  Tax revenue by sector
+
+```{r tax_rev_by_sector_2017_18,cache=T, dependson = "Hashil_data",include=F}
+
+# Tax revenue payment collection data from BI
+
+tax_rev1718=read.xlsx('Dataset/Tax revenue FY1718 from BI.xlsx',sheet = 1)
+
+# We selected the columns that we needed for the analysis
+
+tax_rev1718_S <- tax_rev1718 %>%select(1,2,18,25,28) %>% mutate_at(vars(5),~parse_number(.)) # ~parse_number is to convert column 28 to numeric data type
+
+# We joined registration data to collection data to get ISIC
+
+tax_rev_by_sector <-left_join(tax_rev1718_S,hasil.file,by='TIN')
+
+# We selected the columns that we wanted
+
+tax_rev_by_sector <- tax_rev_by_sector %>% select(1,2,3,4,5,7,8) 
+
+# We addeded conditional statement to the isicdesc such that if isicdesc is empty and totalcustomstax>0, then we called isicdesc 'Occasional Importer' else we called it 'Other service'
+
+tax_rev_by_sector$isicdesc= if_else(is.na(tax_rev_by_sector$isicdesc)& tax_rev_by_sector$Total.Customs.Tax>0,'Occasional Importers','Other service')
+
+# Recoding ISIC by Sectors and aggregating by Total
+
+tax_rev_by_sector=tax_rev_by_sector %>% mutate(sector=recode_factor(isic,
+             'A'='Agriculture',
+             'B'='Industry',
+             'C'='Industry',
+             'D'='Industry',
+             'E'='Industry',
+             'F'='Industry',
+             .default = 'Services',
+             .missing = 'Services')) %>% 
+  group_by(sector) %>% summarise(`2017/18`=sum(Total,na.rm = T))
+tax_revenue_by_sector_FY2017_18=tax_rev_by_sector
+```
+
+```{r tax_revenue_by_sector_FY2009_17,include=F}
+
+# We loaded the analysis done before by Harshil for 2009 to 2017
+
+tax_rev_FY2009_17=read.xlsx('Dataset/Tax revenue FY1718 from BI.xlsx',sheet = 2)
+
+# Recoding ISIC by Sectors and aggregating by Total
+
+tax_rev_by_sector_FY2009_17=tax_rev_FY2009_17 %>% mutate(sector=recode_factor(isic,
+             'A'='Agriculture',
+             'B'='Industry',
+             'C'='Industry',
+             'D'='Industry',
+             'E'='Industry',
+             'F'='Industry',
+             .default = 'Services',
+             .missing = 'Services')) %>% 
+  group_by(sector) %>% summarise_if(is.numeric, sum, na.rm=T)
+```
+
+
+```{r tax_rev_by_sector_YB,include=F}
+
+# Combining the analysis of FY 2018 to the FY2009_17
+
+tax_rev_by_sector_YB <- bind_cols(tax_rev_by_sector_FY2009_17,tax_revenue_by_sector_FY2017_18[,2]) 
+
+# Converting the revenue for all the years in RWF billion
+tax_rev_by_sector_YB <- tax_rev_by_sector_YB %>% mutate_at(vars(2:10),~(round(./10^9,2)))
+
+tax_rev_by_sector_YB <- tax_rev_by_sector_YB %>% rename(Sector=sector) 
+
+tax_rev_by_sector_YB$Sector <-  as.character(tax_rev_by_sector_YB$Sector)
+
+# Grand total calculation 
+
+a=summarise_all(tax_rev_by_sector_YB[-1],sum);b=tibble(Sector='Total')
+
+Total=bind_cols(b,a)
+
+tax_rev_by_sector_YB=bind_rows(tax_rev_by_sector_YB,Total)
+```
+
+```{r tax_rev_by_sector_final,include=F}
+
+# We manipulated the data by using Percentage from the BI data `tax_rev_by_sector_final` to the real collection data
+
+# This is done in Excel sheet
+
+actual_revenue_by.sector=tribble(
+  ~`Sector`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`, ~`2017/18`,
+            "Agriculture",      2.1,      3.6,      6.1,        7,      9.2,      9.2,     14.1,     11.6,     12.6,
+           "Industry",     91.7,    116.1,    151.2,    163.3,    188.1,    191.8,    230.7,    252.4,    278.9,
+           "Services",      283,    340.9,    398.7,    481.6,    566.2,    658.2,    741.8,    822.5,    942.9,
+              "Total",    376.8,    460.6,      556,    651.9,    763.5,    859.2,    986.6,   1086.5,   1234.4)
+
+# Percentage from BI data								
+
+percentage=tribble(
+  ~`Sector`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`, ~`2017/18`,
+             "Agriculture",   "0.6%",   "0.8%",   "0.6%",   "0.9%",   "0.9%",   "0.9%",   "1.2%",   "1.1%",     "1%",
+           "Industry",  "24.3%",  "25.2%",  "26.1%",  "24.6%",  "23.8%",  "23.9%",  "24.3%",  "23.2%",    "23%",
+           "Services",  "75.1%",  "74.0%",  "73.3%",  "74.5%",  "75.3%",  "75.2%",  "74.6%",  "75.7%",    "76%")
+```
+
+
+
+```{r data table for actual Sector, echo=F}
+# using `DT` Java library to get download page
+
+datatable(actual_revenue_by.sector,caption = "Tax revenue by sector:", extensions = 'Buttons',
+options = list(dom='Bfrtip',                                                buttons=c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+
+
+```{r data table for % Sector, echo=F}
+# using `DT` Java library to get download page
+
+datatable(percentage,caption = "Percentage tax revenue by sector:",extensions = 'Buttons',options = list(dom='Bfrtip', buttons=c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+# Visualization of Tax revenue by sector
+```{r tax_rev_by_sector_YB_Chart,echo=F}
+viz1=actual_revenue_by.sector[1:3,] %>%  gather(key = 'Year',value = 'Revenue',-`Sector`)
+
+viz2=percentage[1:3,] %>% gather(key = 'Year',value = 'Percentage',-`Sector`)
+
+chart.table=bind_cols(viz1,viz2[,3]) %>% mutate(Year=factor(Year))
+
+g=ggplot(chart.table,aes(x=Year,y=Revenue, fill=Sector))+
+  geom_bar(stat = 'identity')+theme_bw()+labs(x='Fiscal year',y='Tax revenue (Rwf bn)', fill='Sector', caption = "From RRA data", tag= 'Fig.1', title='Tax revenue by sector')+
+  theme(legend.position = 'top',axis.title.y = element_text(size = 12, face='bold'), axis.title.x =element_text(size = 12, face='bold'))
+
+ggplotly(g)
+```
+
+# Tax revenue by enterprise size
+
+```{r tax revenue by tax enterprise size FY2017_18,include=F}
+# Grouping tax payers into enterprise size
+
+tax_rev1718_E= tax_rev1718%>%select(1,2,3,18,25,28) %>% mutate_at(vars(6),~parse_number(.))%>% rename(`Scale desc`=Scale.desc) %>% mutate_at(vars(3),~as_factor(.)) %>% mutate(`Scale desc`=fct_collapse(`Scale desc`,      Small=c("SMALL","NON-BUSINESS", "MICRO"),
+     Medium="MEDIUM",
+     Large="LARGE"))
+tax_rev1718_E=tax_rev1718_E %>% mutate(`Scale desc`=fct_relevel(`Scale desc`,'Small',after = 0))
+
+tax_rev1718_E <- tax_rev1718_E %>% group_by(`Scale desc`) %>% summarise(`2017/18`=sum(Total,na.rm = T))
+```
+
+```{r tax revenue by enterprise size FY2009_17, include=F}
+# This data was from the analysis done before
+
+tax_rev_2009_17_E <-  tribble(
+  ~`Size`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`,
+                "Small",     52011365645,     76194136968,    135613977049,    139069324669,    171907720828,    211232367056,    261142501500,    265021785376,
+               "Medium",     60227375104,     77876912128,    104499830784,     92267200512,     93977206784,    101571870720,    107970920448,    139249172480,
+                "Large",    248441716736,    309714518016,    412835577856,    433031479296,    509692411904,    569827262464,    620696109056,    680577269760)
+
+```
+
+```{r tax revenue by tax enterprise size_YB,include=F}
+# Converting the revenue for all the years in RWF billion
+
+tax_rev_by_enterprise_YB <- bind_cols(tax_rev_2009_17_E,tax_rev1718_E[,2]) 
+tax_rev_by_enterprise_YB <- tax_rev_by_enterprise_YB %>% mutate_at(vars(2:10),~(round(./10^9,2)))
+
+# tax_rev_by_sector_YB$ <-  as.character(tax_rev_by_sector_YB$`Revenue (Rwf bn)`)
+
+# Calculating Grand Total
+a=summarise_all(tax_rev_by_enterprise_YB[-1],sum);b=tibble(Size='Total')
+
+Total=bind_cols(b,a)
+tax_rev_by_enterprise_YB=bind_rows(tax_rev_by_enterprise_YB,Total)
+```
+
+```{r tax_rev_by_enterprisesize_final,include=F}
+
+# We manipulated the data by using Percentage from the BI data `tax_rev_by_enterprise_YB` to the real collection data
+
+# This is done in Excel sheet
+
+actual_revenue_by.enterprise <- tribble(
+  ~`Size`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`, ~`2017/18`,
+  "Small",     54.3,     75.7,      6.1,        7,      9.2,      9.2,     14.1,    265.4,    312.2,
+           "Medium",     62.9,     77.3,    151.2,    163.3,    188.1,    191.8,    230.7,    139.5,      150,
+            "Large",    259.6,    307.6,    398.7,    481.6,    566.2,    658.2,    741.8,    681.6,    772.3,
+            "Total",    376.8,    460.6,      556,    651.9,    763.5,    859.2,    986.6,   1086.5,   1234.4 )
+
+  
+  
+# Percentage from BI data								
+percentage=tribble(
+  ~`Size`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`, ~`2017/18`,
+ "Small",  "14.4%",  "16.4%",  "20.8%",  "20.9%",  "22.2%",  "23.9%",  "26.4%",  "24.4%",    "25%",
+           "Medium",  "16.7%",  "16.8%",  "16.0%",  "13.9%",  "12.1%",  "11.5%",  "10.9%",  "12.8%",    "12%",
+            "Large",  "68.9%",  "66.8%",  "63.2%",  "65.2%",  "65.7%",  "64.6%",  "62.7%",  "62.7%",    "63%" )
+```
+
+
+
+```{r data table for actual Enterprise size, echo=F}
+# Using data.table
+datatable(actual_revenue_by.enterprise,caption = "Tax revenue by enterprise size:", extensions = 'Buttons',
+options = list(dom='Bfrtip',                                                buttons=c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+```{r data table for % Enterprise size, echo=F}
+datatable(percentage,caption = "Percentage tax revenue by enterprise size:",extensions = 'Buttons',options = list(dom='Bfrtip', buttons=c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+
+# Visualization of tax revenue by enterprise size
+
+```{r tax_rev_by_enterprise_YB_Chart,echo=F}
+viz1=actual_revenue_by.enterprise[1:3,] %>%  gather(key = 'Year',value = 'Revenue',-`Size`)
+
+viz2=percentage[1:3,] %>% gather(key = 'Year',value = 'Percentage',-`Size`)
+chart.table=bind_cols(viz1,viz2[,3]) %>% mutate(Year=factor(Year))
+
+g <- ggplot(chart.table,aes(x=Year,y=Revenue, group=`Size`))+
+ geom_point(size=1)+
+  geom_line(aes(color=`Size`))+
+  theme_bw()+
+  labs(x='Fiscal year',y='Tax revenue (Rwf bn)', title='Tax revenue by enterprize size', fill='Enterprise size', caption = "Source: RRA data", tag= 'Fig.2')+
+  theme(legend.position = 'top',axis.title.y = element_text(size = 12, face='bold'), axis.title.x =element_text(size = 12, face='bold'))
+
+ggplotly(g)
+
+```
+
+# Tax revenue by enterprise type
+
+```{r tax revenue by tax enterprise type FY2017_18,include=F}
+# Grouping tax payers into enterprise type and changing the revenue into RWF billion
+
+tax_rev1718_ET= tax_rev1718%>%select(1,2,5,28) %>% mutate_at(vars(4),~parse_number(.))%>% rename(Type=Ent.Type.Group) %>% mutate_at(vars(3),~as_factor(.))%>% 
+  mutate(Type=fct_recode(Type, 'Private sector'='PRIVATE',
+      'Public sector'='PUBLIC')) %>% 
+  group_by(Type) %>% 
+  summarise(`2017/18`=sum(Total,na.rm = T)) %>% mutate_at(vars(2),~round(./10^9,2))
+
+```
+
+
+```{r tax revenue by enterprise type FY2009_17, include=F}
+
+# This data was from the analysis done before
+
+tax_rev_2009_17_ET <- tribble(
+  ~`Type`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`,
+   "Private sector",   301.61,   382.06,   522.89,   511.94,   581.98,   677.98,   783.77,   854.37,
+    "Public sector",    59.07,    81.73,   130.06,   152.43,   193.59,   204.65,   206.04,   230.47)
+
+```
+  
+```{r tax revenue by tax enterprise type_YB,include=F}
+# Combining tax revenue for FY2017/18 and FY2009/17
+tax_rev_by_enterprise_type_YB <- bind_cols(tax_rev_2009_17_ET,tax_rev1718_ET[,2])     
+
+# Calculating grand total
+a=summarise_all(tax_rev_by_enterprise_type_YB[-1],sum);b=tibble(`Type`='Total')
+Total=bind_cols(b,a)
+tax_rev_by_enterprise_type_YB=bind_rows(tax_rev_by_enterprise_type_YB,Total)
+```
+
+
+
+```{r tax_rev_by_enterprisetype_final,include=F}
+
+# We manipulated the data by using Percentage from the BI data `tax_rev_by_enterprise_type_YB` to the real collection data
+
+# This is done in Excel sheet
+							
+actual_revenue_by.enterprise.type <- tribble(
+  ~`Type`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`, ~`2017/18`,
+  "Private sector", 315.1, 379.4, 445.3, 502.3, 572.9,   660, 781.2,  855.7,  970.4,
+     "Public sector",  61.7,  81.2, 110.7, 149.6, 190.6, 199.2, 205.4,  230.8,    264,
+             "Total", 376.8, 460.6,   556, 651.9, 763.5, 859.2, 986.6, 1086.5, 1234.4)
+
+  
+# Percentage from BI data								
+percentage <- tribble(~`Type`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`, ~`2017/18`,
+ "Private sector",  "83.6%",  "82.4%",  "80.1%",  "77.1%",  "75.0%",  "76.8%",  "79.2%",  "78.8%",  "78.6%", "Public sector",  "16.4%",  "17.6%",  "19.9%",  "22.9%",  "25.0%",  "23.2%",  "20.8%",  "21.2%",  "21.4%" )
+
+```
+
+
+```{r data table for actual Enterprise type, echo=F}
+# Using data.table
+
+datatable(actual_revenue_by.enterprise.type,caption = "Tax revenue by enterprise type:", extensions = 'Buttons',
+options = list(dom='Bfrtip',                                                buttons=c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+```{r data table for % Enterprise type, echo=F}
+datatable(percentage,caption = "Percentage tax revenue by enterprise type:",extensions = 'Buttons',options = list(dom='Bfrtip', buttons=c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+
+# Visualization of tax revenue by enterprise type
+
+```{r tax_rev_by_enterprise.type_YB_Chart,echo=F}
+
+viz1=actual_revenue_by.enterprise.type[1:2,] %>%  gather(key = 'Year',value = 'Revenue',-`Type`)
+
+viz2=percentage[1:2,] %>% gather(key = 'Year',value = 'Percentage',-`Type`)
+
+chart.table=bind_cols(viz1,viz2[,3]) %>%mutate(`Type`=as_factor(`Type`) %>% fct_relevel(.,'Public sector')) %>% mutate(Year=factor(Year))
+
+g=ggplot(chart.table,aes(x=Year, y=Revenue,
+  fill=`Type`))+
+  geom_bar(stat = 'identity', position = position_dodge(), alpha=0.5, width = 0.9)+theme_bw()+labs(x='Fiscal year',y='Tax revenue (Rwf bn)', fill='Enterprise type', caption = "Source: RRA data", tag= 'Fig.3', title='Tax revenue by enterprise type')+
+  theme(legend.position = 'top', axis.title.y = element_text(size = 12, face='bold'), axis.title.x =element_text(size = 12, face='bold'), axis.text.x = element_text(angle = 50, vjust = 0.3))+
+scale_fill_manual(values = c("Private sector" = "green", "Public sector" = "red"), aesthetics = 'fill')+geom_text(aes(label=Percentage), vjust=1.2, size=2.5, colour='black',position = position_dodge(width = 0.9))
+ggplotly(g)
+```
+
+
+```{r cleancache1, include=F}
+knitr::clean_cache(clean = T)
+```
+                
+# Part A: Tax revenue by Enterprise type description
+
+
+```{r tax revenue by Individual vs Corporation Part A,cache=T, include=F}
+
+# Appending Column `Year` into tax_rev_FY1718 dataset
+
+tax_rev_FY1718=tax_rev1718 %>% mutate(Year='2017/18') %>% rename('T'=Total)
+
+
+# Loading tax revenue data from FY2009 to FY2017
+
+tax_rev_FY2009_17=read_csv('Dataset/tax_rev_2009_17.csv')
+
+
+# Making the colnames of `tax_rev_FY1718` equal to `tax_rev_FY2009_17`
+
+names(tax_rev_FY1718)=names(tax_rev_FY2009_17)
+
+# Combining `tax_rev_FY2009_17` and `tax_rev_FY1718` together
+
+tax_rev_FY2009_18=rbind(tax_rev_FY2009_17,tax_rev_FY1718)
+
+# Selecting the columns that we wanted and grouping into enterprise type description
+tax_rev_FY2009_18_IC_A=tax_rev_FY2009_18 %>% select(1,2,4,29,28)%>% mutate_at(vars(5),~parse_number(.)) %>% mutate_at(vars(3),~str_squish(.)) %>% 
+  mutate_at(vars(3),~factor(.))%>% mutate(`Ent Type Desc`=fct_collapse(`Ent Type Desc`,
+ `Association & Non Profit Org.`=c('ASSOCIATION', 'NON PROFIT ORG.','TRUST'),
+ `Cooperative`   =  'COOPERATIVE',
+  Embassy = c('CONSULAR OFFICE', 'EMBASSY', 'PRIVILEGED PERSONS'),     
+    `Individual Enterprise`='INDIVIDUAL',
+  `Joint Venture`='JOINT VENTURE',  
+ `NGOs`=c('LOCAL NGOs','INTERNATIONAL NGOs'),
+ `Others`='OTHERS',  
+ `Partnership`='PARTNERSHIP',
+ `Not Enterprise`=	'Not Enterprise',
+ `Private Corporation`=c('Company','PRIVATE CORPORATION'),
+ `Public Institution`=c('GOVERNMENT BODY','PUBLIC CORPORATION'))) 
+ 
+tax_rev_FY2009_18_IC_A =tax_rev_FY2009_18_IC_A %>% group_by(`Ent Type Desc`,Year) %>% summarise(Total=sum(T, na.rm = T))
+
+# Creating a pivot table for Year and Total
+tax_rev_FY2009_18_IC_A=tax_rev_FY2009_18_IC_A %>% group_by(`Ent Type Desc`) %>% spread(Year,Total)
+```
+
+```{r tax revenue by Individual vs Corporation_YB Part A, include=F}
+
+tax_rev_by_Ind_vs_Corp_YB_A <- tax_rev_FY2009_18_IC_A %>% mutate_at(vars(2:10),~(round(./10^9,2)))
+
+tax_rev_by_Ind_vs_Corp_YB_A=tax_rev_by_Ind_vs_Corp_YB_A %>%ungroup(`Ent Type Desc`) %>% mutate(`Ent Type Desc`=parse_character(`Ent Type Desc`)) %>% rename(`Type desc.`=`Ent Type Desc`)
+
+
+# Calculating Grand total
+a=summarise_all(tax_rev_by_Ind_vs_Corp_YB_A[-1],sum,na.rm=T);b=tibble(`Type desc.`='Total')
+
+Total=bind_cols(b,a)
+tax_rev_by_Ind_vs_Corp_YB_A=bind_rows(tax_rev_by_Ind_vs_Corp_YB_A,Total)
+
+```
+
+```{r Individual vs Corporation_YB_final Part A, echo=F}
+# We manipulated the data by using Percentage from the BI data `tax_rev_by_Ind_vs_Corp_YB_A` to the real collection data
+
+# This is done in Excel sheet
+							
+actual_revenue_by.Ind_vs_Corp_A=tribble(
+  ~`Type desc.`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`, ~`2017/18`,
+  "Association & Non Profit Org.",      9.9,     15.6,     15.9,     15.2,     15.9,     16.6,     19.6,     20.1,     21.7,
+            "Private Corporation",    235.3,    269.4,    309.3,    376.4,    434.7,    518.4,    634.7,    700.1,      817,
+                        "Embassy",      0.2,      0.5,      0.4,      0.4,      0.4,      0.4,      0.4,      1.1,      1.1,
+                    "Cooperative",      1.6,      3.1,      3.6,      5.3,      6.2,      6.6,      8.2,     10.5,     12.8,
+             "Public Institution",     73.3,     99.8,    118.4,    144.6,    192.9,    202.1,      212,    236.6,      264,
+          "Individual Enterprise",     27.1,     34.5,     65.3,     64.6,       62,     65.2,     66.6,     72.7,     67.4,
+                           "NGOs",     14.2,     19.5,     16.8,       19,       21,     22.5,     25.8,     28.2,     32.5,
+                  "Joint Venture",      0.6,      0.6,      0.3,      0.4,      0.2,      1.6,      0.5,      1.6,      1.2,
+                 "Not Enterprise",      1.1,      1.8,     10.9,      9.7,      7.6,      7.5,     11.5,     12.7,     13.4,
+                         "Others",     11.7,     14.2,     12.8,     14.8,     21.6,     17.5,      6.5,        2,      2.3,
+                    "Partnership",      1.8,      1.6,      2.4,      1.5,        1,      0.8,      0.8,      0.8,      0.8,
+                          "Total",    376.8,    460.6,      556,    651.9,    763.5,    859.2,    986.6,   1086.5,   1234.4 )
+
+# Percentage from BI data								
+
+percentage=tribble(~`Type desc.`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`, ~`2017/18`,
+                           "Association & Non Profit Org.",   "2.6%",   "3.4%",   "2.9%",   "2.3%",   "2.1%",   "1.9%",   "2.0%",   "1.8%",   "1.8%",
+                                     "Private Corporation",  "62.5%",  "58.5%",  "55.6%",  "57.7%",  "56.9%",  "60.3%",  "64.3%",  "64.4%",  "66.2%",
+                                                 "Embassy",   "0.1%",   "0.1%",   "0.1%",   "0.1%",   "0.0%",   "0.0%",   "0.0%",   "0.1%",   "0.1%",
+                                             "Cooperative",   "0.4%",   "0.7%",   "0.6%",   "0.8%",   "0.8%",   "0.8%",   "0.8%",   "1.0%",   "1.0%",
+                                      "Public Institution",  "19.4%",  "21.7%",  "21.3%",  "22.2%",  "25.3%",  "23.5%",  "21.5%",  "21.8%",  "21.4%",
+                                   "Individual Enterprise",   "7.2%",   "7.5%",  "11.7%",   "9.9%",   "8.1%",   "7.6%",   "6.8%",   "6.7%",   "5.5%",
+                                                    "NGOs",   "3.8%",   "4.2%",   "3.0%",   "2.9%",   "2.7%",   "2.6%",   "2.6%",   "2.6%",   "2.6%",
+                                           "Joint Venture",   "0.2%",   "0.1%",   "0.0%",   "0.1%",   "0.0%",   "0.2%",   "0.1%",   "0.1%",   "0.1%",
+                                          "Not Enterprise",   "0.3%",   "0.4%",   "2.0%",   "1.5%",   "1.0%",   "0.9%",   "1.2%",   "1.2%",   "1.1%",
+                                                  "Others",   "3.1%",   "3.1%",   "2.3%",   "2.3%",   "2.8%",   "2.0%",   "0.7%",   "0.2%",   "0.2%",
+                                             "Partnership",   "0.5%",   "0.3%",   "0.4%",   "0.2%",   "0.1%",   "0.1%",   "0.1%",   "0.1%",   "0.1%")
+                         
+```
+
+
+
+```{r data table for actual Enterprise type desc, echo=F}
+# Using data.table
+datatable(actual_revenue_by.Ind_vs_Corp_A,caption = "Tax revenue by enterprise type description:", extensions = 'Buttons',
+options = list(dom='Bfrtip',                                                buttons=c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+```{r data table for % Enterprise type desc, echo=F}
+datatable(percentage,caption = "Percentage tax revenue by enterprise type description:",extensions = 'Buttons',options = list(dom='Bfrtip', buttons=c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+
+# Part B: Tax revenue by Enterprise type description
+
+```{r tax revenue by Individual vs Corporation Part B,cache=T, include=F}
+# Selecting the column that we wanted and grouping into enterprise type description
+
+tax_rev_FY2009_18_IC_B=tax_rev_FY2009_18 %>% select(1,2,4,29,28) %>% mutate_at(vars(5),~parse_number(.)) %>% 
+  mutate_at(vars(4),~factor(.)) %>% 
+  mutate(`Ent Type Desc`=recode_factor(`Ent Type Desc`,
+           "INDIVIDUAL"='Individual enterprise',
+            .default= 'Corporation')) 
+
+tax_rev_FY2009_18_IC_B =tax_rev_FY2009_18_IC_B %>% group_by(`Ent Type Desc`,Year) %>% summarise(Total=sum(T, na.rm = T))
+
+# Creating Pivot table for Year and Total
+
+tax_rev_FY2009_18_IC_B=tax_rev_FY2009_18_IC_B %>% group_by(`Ent Type Desc`) %>% spread(Year,Total)
+```
+
+```{r tax revenue by Individual vs Corporation_YB_B, include=F}
+# Convert the taxrevenue into RWF billion
+tax_rev_by_Ind_vs_Corp_YB_B <- tax_rev_FY2009_18_IC_B %>% mutate_at(vars(2:10),~(round(./10^9,2)))
+
+tax_rev_by_Ind_vs_Corp_YB_B=tax_rev_by_Ind_vs_Corp_YB_B %>%ungroup(`Ent Type Desc`) %>% mutate(`Ent Type Desc`=parse_character(`Ent Type Desc`)) %>% rename(`Type desc.`=`Ent Type Desc`)
+
+
+# Calculating Grand total
+
+a=summarise_all(tax_rev_by_Ind_vs_Corp_YB_B[-1],sum);b=tibble(`Type desc.`='Total')
+Total=bind_cols(b,a)
+tax_rev_by_Ind_vs_Corp_YB_B=bind_rows(tax_rev_by_Ind_vs_Corp_YB_B,Total)
+```
+
+```{r Individual vs Corporation_YB_final_B, echo=F}
+
+# We manipulated the data by using Percentage from the BI data `tax_rev_by_Ind_vs_Corp_YB_A` to the real collection data
+
+# This is done in Excel sheet
+
+actual_revenue_by.Ind_vs_Corp_B=tribble(
+  ~`Type desc.`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`, ~`2017/18`,
+    "Individual enterprise",     27.1,     34.6,     65.3,     64.7,     62.2,     65.3,     66.7,     72.8,     67.4,
+              "Corporation",    349.7,      426,    490.7,    587.2,    701.3,    793.9,    919.9,   1013.7,     1167,
+                    "Total",    376.8,    460.6,      556,    651.9,    763.5,    859.2,    986.6,   1086.5,   1234.4)
+
+
+# Percentage from BI data								
+
+percentage=tribble(~`Type desc.`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`, ~`2017/18`,
+  "Individual enterprise",   "7.2%",   "7.5%",  "11.8%",   "9.9%",   "8.1%",   "7.6%",   "6.8%",   "6.7%",   "5.5%",
+            "Corporation",  "92.8%",  "92.5%",  "88.2%",  "90.1%",  "91.9%",  "92.4%",  "93.2%",  "93.3%",  "94.5%")
+```
+
+```{r data table for actual Enterprise type desc_B, echo=F}
+# Using `DT` library ...
+
+datatable(actual_revenue_by.Ind_vs_Corp_B,caption = "Tax revenue by enterprise type description:", extensions = 'Buttons',
+options = list(dom='Bfrtip',                                                buttons=c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+```{r data table for % Enterprise type desc_B, echo=F}
+# Using `DT` library ...
+
+datatable(percentage,caption = "Percentage tax revenue by enterprise type description:",extensions = 'Buttons',options = list(dom='Bfrtip', buttons=c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+# Tax revenue by department
+
+```{r tax revenue by department FY2009_18,include=F}
+
+# The data were taking from Roy's Excel file and not BI datawarehouse
+
+actual_revenue_by.dept=tribble(
+  ~`Department`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`, ~`2017/18`,
+              "DTD",    250.4,      300,      371,    449.3,    522.6,    594.3,    660.9,    729.3,    852.4,
+          "Customs",      122,    157.3,    166.6,    180.3,    216.5,      239,    288.5,    312.6,    335.8,
+        "Road Fund",     12.8,     16.6,     18.4,     22.3,     24.4,     25.9,     37.3,     44.6,     46.2,
+            "Total",    385.2,    473.9,      556,    651.9,    763.4,    859.1,    986.7,   1086.5,   1234.4 )
+
+
+# Percentage of the data								
+percentage=tribble(~`Department`, ~`2009/10`, ~`2010/11`, ~`2011/12`, ~`2012/13`, ~`2013/14`, ~`2014/15`, ~`2015/16`, ~`2016/17`, ~`2017/18`,
+                                         "DTD",  "65.0%",  "63.3%",  "66.7%",  "68.9%",  "68.5%",  "69.2%",  "67.0%",  "67.1%",  "69.1%",
+                                     "Customs",  "31.7%",  "33.2%",  "30.0%",  "27.7%",  "28.4%",  "27.8%",  "29.2%",  "28.8%",  "27.2%",
+                                   "Road Fund",   "3.3%",   "3.5%",   "3.3%",   "3.4%",   "3.2%",   "3.0%",   "3.8%",   "4.1%",   "3.7%")
+                           
+```
+
+```{r data table for dept, echo=F}
+# Using data.table
+datatable(actual_revenue_by.dept,caption = "Tax revenue by department:", extensions = 'Buttons',
+options = list(dom='Bfrtip',                                                buttons=c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+```{r data table for % department, echo=F}
+# Using data.table
+datatable(percentage,caption = "Percentage tax revenue by department:",extensions = 'Buttons',options = list(dom='Bfrtip', buttons=c('copy', 'csv', 'excel', 'pdf', 'print')))
+```
+
+# Visualization of tax revenue by department
+
+```{r tax_rev_by_dept.chart,echo=F}
+
+# unpivot columns as in Power Query in Excel
+
+viz1=actual_revenue_by.dept[1:3,] %>%  gather(key = 'Year',value = 'Revenue',-`Department`)
+
+viz2=percentage[1:3,] %>% gather(key = 'Year',value = 'Percentage',-`Department`)
+
+chart.table=bind_cols(viz1,viz2[,3]) %>% mutate(`Department`=as_factor(`Department`) %>% fct_relevel(.,"Road Fund","Customs","DTD")) 
+
+g=ggplot(chart.table,aes(x=Year, y=Revenue,
+  fill=`Department`))+
+  geom_bar(stat = 'identity', position = position_dodge(),  width = 0.9)+theme_bw()+labs(x='Fiscal year',y='Tax revenue (Rwf bn)', fill='Department', caption = "Source: RRA data", tag= 'Fig.4', title='Tax revenue by department')+
+  theme(legend.position = 'bottom', axis.title.y = element_text(size = 12, face='bold'), axis.title.x = element_blank(), axis.text.x = element_text(angle = 50, vjust = 0.1))+
+  geom_text(aes(label=Percentage), vjust=-1.3, size=2.4, colour='black',position = position_dodge(width = 0.9))
+ggplotly(g)
+```
+
+```{r cleancache2, include=F}
+knitr::clean_cache(clean = T)
+```
+
+
+
+This portal is powered by [Ezekiel Adebayo](https://bit.ly/gbganalyst).
+

@@ -1,0 +1,129 @@
+---
+title: "VAT Turnover for FY 2017/18"
+author: "RRA"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: pdf_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r R library,include=FALSE}
+# loading all the library needed
+if (!require('install.load')){
+  install.packages('install.load')
+}
+
+install.load::install_load(c('tidyverse','openxlsx','readxl','gridExtra','xtable', 'DT'))
+
+```
+
+\textbf{Automation of VAT } 
+
+```{r hasil file, cache=T, include=F}
+hasil.file <- read.xlsx("Dataset/file from Hashil.xlsx")
+```
+
+```{r vat file FY2017/18, include=F, cache=T}
+vat_data=read_csv('Dataset/VAT 2017-18.csv')
+vat_data=vat_data %>% select(1,2,16,17,18) 
+```
+
+```{r VAT analysis, include=F}
+vat_turnover <-left_join(vat_data,hasil.file,by='TIN') 
+
+vat_turnover <- vat_turnover %>% 
+  select(1,2,3,4,5,7,8)%>%
+  mutate(isicdesc=isicdesc %>% factor() %>% fct_expand(., 'Total')) %>%
+  mutate(isicdesc=fct_explicit_na(isicdesc,na_level = 'Other Service Activities')) 
+
+vat_turnover_section=vat_turnover %>%
+  mutate(`Total non taxable`=`Exempted Sales`+`Zero-Rated Sales`) %>%   group_by(isicdesc) %>% 
+  summarise(`Total turnover`=sum(`Total Value of Supplies`,na.rm = T), `Exempted sales`=sum(`Exempted Sales`,na.rm = T), `Zero rated sales`=sum(`Zero-Rated Sales`,na.rm = T) ,`Total non taxable`=sum(`Total non taxable`,na.rm = T))
+
+vat_turnover_section <- vat_turnover_section %>% mutate_at(vars(2:5),~round(./10^9,2))
+```
+
+```{r Group by main section, include=F}
+# Sum by column names (Total)
+a=summarise_all(vat_turnover_section[-1],sum);b=tibble(isicdesc=factor('Total'))
+
+Total=bind_cols(b,a)
+vat_turnover_section=bind_rows(vat_turnover_section,Total)
+vat_turnover_section=vat_turnover_section %>% mutate(`% turnover `=round(`Total turnover`/sum(`Total turnover`[-21])*100,2),
+    `% Total non taxable`=round(`Total non taxable`/sum(`Total non taxable`[-21])*100,2)) %>% select(1,2,6,3,4,5,7)
+                                                     
+a=vat_turnover_section[1:20,] %>% arrange(desc(`Total turnover`))
+b=vat_turnover_section[21,]
+vat_turnover_section <- bind_rows(a,b) %>% rename(`Revenue (Rwf bn)`=isicdesc)
+# write.xlsx(vat_turnover_section,'vat_turnover_section.xlsx')
+```
+```{r Group by sector, include=F}
+vat_turnover_sector=vat_turnover %>% 
+  mutate(sector=recode_factor(isic,
+         'A'='Agriculture',
+         'B'='Industry',
+         'C'='Industry',
+         'D'='Industry',
+         'E'='Industry',
+         'F'='Industry',
+         .default = 'Services',
+         .missing = 'Services')) %>% 
+  mutate(`Total non taxable`=`Exempted Sales`+`Zero-Rated Sales`) %>%   group_by(sector) %>% 
+  summarise(`Total turnover`=sum(`Total Value of Supplies`,na.rm = T), `Exempted sales`=sum(`Exempted Sales`,na.rm = T), `Zero rated sales`=sum(`Zero-Rated Sales`,na.rm = T) ,`Total non taxable`=sum(`Total non taxable`,na.rm = T))
+
+vat_turnover_sector <- vat_turnover_sector %>% mutate_at(vars(2:5),~round(./10^9,2))
+
+vat_turnover_sector <- vat_turnover_sector %>% rename(`Revenue (Rwf bn)`=sector) 
+
+vat_turnover_sector$`Revenue (Rwf bn)` <-  as.character(vat_turnover_sector$`Revenue (Rwf bn)`)
+
+# Sum by column names (Total)
+a=summarise_all(vat_turnover_sector[-1],sum);b=tibble(`Revenue (Rwf bn)`='Total')
+Total=bind_cols(b,a)
+vat_turnover_sector=bind_rows(vat_turnover_sector,Total)
+vat_turnover_sector=vat_turnover_sector %>% 
+mutate(`% turnover `=round(`Total turnover`/sum(`Total turnover`[-4])*100,2),
+    `% Total non taxable`=round(`Total non taxable`/sum(`Total non taxable`[-4])*100,2)) %>% select(1,2,6,3,4,5,7)
+
+# write.xlsx(vat_turnover_sector,'vat_turnover_sector.xlsx')
+
+```
+
+```{r echo=FALSE, results="asis"}
+print.xtable(
+  xtable(vat_turnover_section, caption="VAT turnover analysis according to the main sections of the economy:", digits=2, format.args = list(big.mark=(','))), 
+  comment=F,caption.placement = 'top')
+```
+
+
+
+```{r, echo=F, results='asis'}
+
+print.xtable(
+  xtable(vat_turnover_sector, caption="VAT turnover analysis according to the main sectors of the economy:",digits=2, format.args = list(big.mark=(','))), 
+  comment=F,caption.placement = 'top',include.rownames = F)
+```
+
+
+```{r visualization by sector, echo=FALSE}
+chart <- vat_turnover_sector[-4,] %>%mutate(`Revenue (Rwf bn)`=`Revenue (Rwf bn)` %>% factor() %>% fct_infreq())
+
+chart <- chart %>% select(1,3,7) %>% gather(group,Percentage,-1)
+ 
+ggplot(chart,aes(x=`Revenue (Rwf bn)`,y=Percentage, group=group))+
+  geom_col(aes(fill=group), width = 0.3,position = position_dodge() ,show.legend = T)+
+  theme_bw()+labs(x='Main sector', y='In Per cent',caption='Source : RRA', title='VAT turnover according to main sector', subtitle='FY2017/18',fill='Key')+
+  geom_text(aes(label = Percentage),
+  position = position_dodge(0.7))+
+  theme(axis.title.x = element_text(face = 'bold',size = 12),
+        axis.title.y = element_text(face = 'bold',size = 12))
+
+```
+
+
+

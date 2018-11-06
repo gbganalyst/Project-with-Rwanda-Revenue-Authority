@@ -1,0 +1,79 @@
+# History files
+.Rproj.user
+.Rhistory
+.Rapp.history
+
+# File not needed to upload to the github
+# Tax statistics analysis
+
+Tax Statistics/Dataset/*.xlsx
+Tax Statistics/Dataset/*.csv
+Tax Statistics/tax.statistics_cache/*
+Tax Statistics/tax.statistics_files/*
+Tax Statistics/*.xlsx
+Tax Statistics/*.docx
+Tax Statistics/*.pdf
+Tax Statistics/.Rhistory
+Tax Statistics/tax_rev_by_CIT_PIT.Rmd
+
+# VAT turnover analysis
+
+VAT turnover for FY2017_18/Dataset/*.xlsx
+VAT turnover for FY2017_18/Dataset/*.csv
+VAT turnover for FY2017_18/*.docx
+VAT turnover for FY2017_18/.Rproj.user
+VAT turnover for FY2017_18/.Rhistory
+VAT turnover for FY2017_18/Automation_of_VAT_turnover_cache/*
+VAT turnover for FY2017_18/Automation_of_VAT_turnover_files/*
+
+
+# Performance analysis
+
+Performance analysis/*.xlsx
+Performance analysis/*.docx
+
+
+# Presentation
+
+Presentation/.Rproj.user
+Presentation/.Rhistory
+Presentation/build/*
+
+
+# Session Data files
+.RData
+
+# Example code in package build process
+*-Ex.R
+
+# Output files from R CMD build
+/*.tar.gz
+
+# Output files from R CMD check
+/*.Rcheck/
+
+# RStudio files
+.Rproj.user/
+
+# produced vignettes
+vignettes/*.html
+vignettes/*.pdf
+
+# OAuth2 token, see https://github.com/hadley/httr/releases/tag/v0.3
+.httr-oauth
+
+# knitr and R markdown default cache directories
+/*_cache/
+/cache/
+
+# Temporary files created by R markdown
+*.utf8.md
+*.knit.md
+
+# Shiny token, see https://shiny.rstudio.com/articles/shinyapps.html
+rsconnect/
+.Rproj.user
+
+# temporary files
+*~
+*bak
