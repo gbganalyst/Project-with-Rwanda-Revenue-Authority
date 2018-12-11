@@ -4,6 +4,7 @@ subtitle: "Planning and Research department"
 author: "Ogundepo Ezekiel Adebayo"
 #institute: "The Institute"
 date: "`r format(Sys.time(), '%B %d, %Y')`"
+autosize: true
 output: 
   beamer_presentation:
     keep_tex: true
@@ -16,6 +17,8 @@ output:
     in_header:
       \usepackage{amsmath}
       \usepackage{hyperref}
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -23,28 +26,31 @@ knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r library,include=F}
-pg=c('tidyverse','xtable')
+pg=c('tidyverse','xtable', 'knitr', 'kableExtra')
 for (i in pg){
   library(i,character.only = T)
 }
 
 ```
 
+# 
+
+![Ezekiel in action](Images\Ezekiel_in_action.jpeg)
 
 # Table of contents
 
 * AIMS/RRA Terms of References
 * On Job training
-* Managing and responding to various requests of data
+* Managed and responded to various requests of data
     - Internal and External
-* Staff development on new programs used in Big Data Analytics
+* Give back to the community
 * Automations
 * Personal Professional Development at RRA
 
 
 # Terms of Reference
 
-As it is in \textit{AIMS/RRA} terms of references, the AIMS interns will contribute to various analyses done in Planning and Research Department and automate some of the key analyses.
+As it is in the \textit{AIMS/RRA} terms of references, the AIMS interns will contribute to various analyses done in Planning and Research Department and automate some of the key analyses.
 
 
 #
@@ -55,7 +61,7 @@ As it is in \textit{AIMS/RRA} terms of references, the AIMS interns will contrib
 
 # On Job training
 
-1. Getting insight with RRA domain. This includes:
+1. Insight with RRA domain. This included:
       1. Taxation theory
       2. BI and DWH
       
@@ -64,46 +70,44 @@ As it is in \textit{AIMS/RRA} terms of references, the AIMS interns will contrib
 
 #
 \begin{center}
-\textbf{Managing and responding to various requests of data}
+\textbf{Managed and responded to various requests of data}
 \end{center}
 
-# Managing and responding to various requests of data
+# Managed and responded to various requests of data
 
-1. Splitting sales annex \textit{big data} that was used by IMF team in the exercise of estimating VAT tax expenditure for Rwanda.
+1. Split sales annex \textit{big data} that were used by IMF team in the exercise of estimating VAT tax expenditure for Rwanda.
 
 ## Summary of the file
 
-The file was more than 20 million rows, it was difficult to work with that size with local processing software such as Excel, SPSS and Stata. We used \textbf{\#Rstats} to do data wrangling by tidying the data, split the data on a monthly and quarterly basis so that IMF can carry further work on it.
+The file was more than 20 million rows, it was difficult to work with that size with local processing software such as Excel, SPSS and Stata. We used \textbf{\#Rstats} to do data wrangling by tidying the data, split the data on a monthly and quarterly basis so that IMF would carry further work on it.
 
-# Managing and responding to various requests of data
+# Managed and responded to various requests of data
 
 2. Contributed to data prepared for MINICOM with regards to the value of transactions made by firms registered in Made in Rwanda policy.
 
 The request was to do analysis based on \textbf{TIN}, \textbf{Business Income} and \textbf{Taxes}.
 
 
-# Managing and responding to various requests of data
+# Managed and responded to various requests of data
 3) Quarterly payment of domestic taxes  for Manufacturing Vs Non-manufacturing from  2007 to 2018_Q1
 
-\textbf{Summary of the analysis}
+## Summary of the analysis
 
-Taxpayer's period year was classified according to tax period quarters, and the payment was classified according to manufacturing and non-manufacturing companies.
+Taxpayer's period years were classified according to quarters and tax payment was classified according to manufacturing and non-manufacturing companies using \textbf{ISIC} code.
 
 # Managing and responding to various requests of data
-5)	Handling big data for VAT sales annexes 
+4)	Handling big data for VAT sales annexes 
 
-Data wrangling was done for VAT sales annex data 2013 -2017 by deleting confidential information. The data were used by the researcher from Harvard University working with IGC on the Consumer Incentives project to evaluate the EBM lottery and potential rebate system.
+Data wrangling was done for VAT sales annex data 2013-2017 by deleting confidential information. The data were used by the researcher from Harvard University working with IGC on the Consumer Incentives project to evaluate the EBM lottery and potential rebate system.
 
-#
+## Structure of the file
 
-**Summary of the file**
-
-The VAT sales annexes data are Big data with more than 30 million rows just for one fiscal year.
+The VAT sales annexes data were Big data with more than 30 million rows just for one fiscal year.
 
 ---
 
 \begin{center}
-\textbf{Staff development on Big Data Analytics}
+\textbf{Give back to the community}
 \end{center}
 
 # R for data science training class
@@ -114,7 +118,7 @@ The VAT sales annexes data are Big data with more than 30 million rows just for 
 
 Twelve (12) RRA staff followed the training for \textit{\textbf{R for data science}} (R programming language). The training was held in the offices of Planning and Research Department.
 
-The staff came from Planning and Research Department and Risk Management Departments, especially in the following units:
+The staff came from Planning and Research Department, and Risk Management Department, especially in the following units:
 
 *	Statistics Division (P & RD)
 *	Research Division (P & RD)
@@ -124,12 +128,11 @@ The staff came from Planning and Research Department and Risk Management Departm
 
 Also, 4 interns in Planning and Research Department attended the training.
 
-# Demonstrating R code
+# R codes demonstration
 
 ```{r, echo=T,eval=TRUE}
 data <- tribble(
   ~`Unit(s)`,~	`Number of attendees`,
-'AIMS Interns (Trainers)', 2,
 'Statistics unit', 3,
 'Research unit' , 2,
 'Planning unit'	,2,
@@ -137,14 +140,14 @@ data <- tribble(
 'BI & DWH unit',	2,
 'Interns in R&P, and RMD', 4,
 'ODI fellow',1,
-'Total',18)
+'Total',16)
 ```
 
 
 # Output of R codes
 
 ```{r}
-#knitr::kable(data,row.names = T,caption = 'List of participants in the R for data science training')
+# kable(data,"latex", booktabs=T,caption = "List of participants in the R for data science training") %>% kable_styling(latex_options = c("striped", "hold_position"))
 ```
 
 ```{r,echo=F, results='asis'}
